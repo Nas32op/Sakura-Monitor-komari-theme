@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Komari Monitor</title>
+    <meta name="description" content="A simple server monitor tool.">
+    <style>
+        :root {
+            --sakura-pink: #FFB7C5;
+            --sakura-deep: #FF89A0;
+            --sakura-accent: #FF6B8A;
+            --sakura-light: #FFF0F3;
+            --sakura-white: #FFFAFB;
+            --bg-gradient-start: #FFE4E8;
+            --bg-gradient-mid: #FFF0F3;
+            --bg-gradient-end: #FFF5F6;
+            --card-bg: rgba(255, 255, 255, 0.75);
+            --card-border: rgba(255, 183, 197, 0.4);
+            --text-primary: #4A3040;
+            --text-secondary: #7A6070;
+            --text-muted: #A08090;
+            --shadow-soft: 0 4px 20px rgba(255, 150, 170, 0.15);
+            --shadow-card: 0 8px 32px rgba(255, 137, 160, 0.12);
+            --progress-bg: #FFE4EA;
+            --badge-online: #7ECB9A;
+            --badge-offline: #FF89A0;
+            --wave-color: rgba(255, 183, 197, 0.3);
+            --glass-blur: 16px;
+        }
+
+        [data-theme="dark"] {
+            --bg-gradient-start: #1a1025;
+            --bg-gradient-mid: #1e1428;
+            --bg-gradient-end: #231830;
+            --card-bg: rgba(30, 20, 40, 0.8);
+            --card-border: rgba(255, 137, 160, 0.25);
+            --text-primary: #E8D5E0;
+            --text-secondary: #C0A0B0;
+            --text-muted: #907080;
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --progress-bg: #2a1a30;
+            --sakura-light: #2a1a30;
+            --sakura-white: #1e1428;
+            --wave-color: rgba(255, 137, 160, 0.12);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif;
+            background: linear-gradient(160deg, var(--bg-gradient-start) 0%, var(--bg-gradient-mid) 40%, var(--bg-gradient-end) 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            color: var(--text-primary);
+            transition: background 0.5s ease, color 0.3s ease;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        #petals-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+
+        .wave-decoration {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 120px;
+            pointer-events: none; z-index: 0; opacity: 0.5;
+            background:
+                radial-gradient(circle at 20px 40px, var(--wave-color) 16px, transparent 17px) 0 0,
+                radial-gradient(circle at 60px 40px, var(--wave-color) 16px, transparent 17px) 0 0,
+                radial-gradient(circle at 100px 40px, var(--wave-color) 16px, transparent 17px) 0 0,
+                radial-gradient(circle at 140px 40px, var(--wave-color) 16px, transparent 17px) 0 0;
+            background-size: 160px 80px;
+            background-position: 0 40px, 40px 0px, 80px 40px, 120px 0px;
+            background-repeat: repeat-x;
+            mask-image: linear-gradient(to top, rgba(0,0,0,0.3) 0%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.3) 0%, transparent 100%);
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px; position: relative; z-index: 1; }
+
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 20px 28px; margin-bottom: 24px;
+            background: var(--card-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--card-border); border-radius: 24px;
+            box-shadow: var(--shadow-card); flex-wrap: wrap; gap: 16px;
+        }
+        .header-left { display: flex; align-items: center; gap: 14px; }
+        .logo-icon {
+            width: 44px; height: 44px; font-size: 28px;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, var(--sakura-pink), var(--sakura-deep));
+            border-radius: 14px;
+            box-shadow: 0 4px 12px rgba(255, 137, 160, 0.35);
+            animation: logoPulse 3s ease-in-out infinite;
+        }
+        @keyframes logoPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+        .site-title {
+            font-size: 22px; font-weight: 700;
+            background: linear-gradient(135deg, var(--sakura-accent), var(--sakura-deep));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; letter-spacing: 1px;
+        }
+        .site-subtitle { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        .header-stat {
+            text-align: center; padding: 8px 18px;
+            background: var(--sakura-light); border-radius: 16px;
+            border: 1px solid var(--card-border);
+        }
+        .header-stat .stat-value { font-size: 20px; font-weight: 700; color: var(--sakura-deep); }
+        .header-stat .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+        .btn {
+            padding: 10px 18px; border: 1px solid var(--card-border); border-radius: 14px;
+            background: var(--card-bg); backdrop-filter: blur(8px);
+            color: var(--text-primary); cursor: pointer; font-size: 13px; font-weight: 500;
+            transition: all 0.25s ease; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+        }
+        .btn:hover {
+            background: var(--sakura-light); border-color: var(--sakura-deep);
+            transform: translateY(-1px); box-shadow: var(--shadow-soft);
+        }
+        .btn.active {
+            background: linear-gradient(135deg, var(--sakura-pink), var(--sakura-deep));
+            color: #fff; border-color: transparent;
+            box-shadow: 0 4px 14px rgba(255, 137, 160, 0.4);
+        }
+        .btn-icon {
+            width: 38px; height: 38px; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 12px; font-size: 16px;
+        }
+        .btn-back {
+            background: linear-gradient(135deg, var(--sakura-pink), var(--sakura-deep));
+            color: #fff; border-color: transparent; font-weight: 600;
+            box-shadow: 0 4px 14px rgba(255, 137, 160, 0.35);
+        }
+        .btn-back:hover { box-shadow: 0 6px 20px rgba(255, 137, 160, 0.5); transform: translateY(-2px); }
+
+        .toolbar {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+        }
+        .group-filter { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+        .group-tag {
+            padding: 6px 14px; border-radius: 20px; border: 1px solid var(--card-border);
+            background: var(--card-bg); color: var(--text-secondary);
+            cursor: pointer; font-size: 12px; transition: all 0.2s ease; user-select: none;
+        }
+        .group-tag:hover, .group-tag.active {
+            background: var(--sakura-pink); color: #fff; border-color: transparent;
+            box-shadow: 0 2px 8px rgba(255, 137, 160, 0.3);
+        }
+
+        .page-list { display: block; }
+        .page-detail { display: none; }
+        body.is-detail .page-list { display: none; }
+        body.is-detail .page-detail { display: block; animation: fadeSlideIn 0.35s ease; }
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .node-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 20px;
+        }
+        .node-grid.table-view { grid-template-columns: 1fr; }
+
+        .node-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--card-border); border-radius: 22px;
+            padding: 22px 24px; box-shadow: var(--shadow-card);
+            transition: all 0.3s ease; position: relative; overflow: hidden; cursor: pointer;
+        }
+        .node-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, var(--sakura-pink), var(--sakura-deep), var(--sakura-accent));
+            opacity: 0; transition: opacity 0.3s ease;
+        }
+        .node-card:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(255, 137, 160, 0.18); }
+        .node-card:hover::before { opacity: 1; }
+        .node-card.offline { opacity: 0.7; }
+        .node-card.offline::after {
+            content: '💤 离线中'; position: absolute; top: 16px; right: 20px;
+            font-size: 12px; color: var(--text-muted);
+            background: var(--sakura-light); padding: 4px 10px; border-radius: 10px;
+        }
+        .node-card-header {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;
+        }
+        .node-name-section { display: flex; align-items: center; gap: 10px; }
+        .node-os-icon {
+            width: 36px; height: 36px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; background: var(--sakura-light);
+        }
+        .node-name { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+        .node-group-badge {
+            font-size: 11px; background: linear-gradient(135deg, var(--sakura-pink), var(--sakura-deep));
+            color: #fff; padding: 3px 10px; border-radius: 10px; font-weight: 500;
+        }
+        .node-status-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--badge-online);
+            box-shadow: 0 0 8px rgba(126, 203, 154, 0.6);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+        .node-status-dot.offline {
+            background: var(--badge-offline);
+            box-shadow: 0 0 8px rgba(255, 137, 160, 0.4); animation: none;
+        }
+        @keyframes statusPulse {
+            0%, 100% { box-shadow: 0 0 4px rgba(126, 203, 154, 0.4); }
+            50% { box-shadow: 0 0 14px rgba(126, 203, 154, 0.8); }
+        }
+
+        .metric-row { margin-bottom: 14px; }
+        .metric-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .metric-name { font-size: 12px; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 5px; }
+        .metric-value {
+            font-size: 12px; font-weight: 600; color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+        }
+        .progress-bar { height: 8px; background: var(--progress-bg); border-radius: 10px; overflow: hidden; }
+        .progress-fill {
+            height: 100%; border-radius: 10px;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        .progress-fill::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0;
+            height: 50%; background: rgba(255,255,255,0.3); border-radius: 10px 10px 0 0;
+        }
+        .progress-fill.cpu { background: linear-gradient(90deg, #FFB7C5, #FF89A0); }
+        .progress-fill.ram { background: linear-gradient(90deg, #FFD4A0, #FFB347); }
+        .progress-fill.disk { background: linear-gradient(90deg, #A8D8EA, #5BA4CF); }
+        .progress-fill.high { background: linear-gradient(90deg, #FF6B8A, #FF4466); }
+
+        .network-row {
+            display: flex; gap: 16px; margin-top: 14px;
+            padding-top: 14px; border-top: 1px solid var(--card-border);
+        }
+        .network-item {
+            flex: 1; font-size: 11px; color: var(--text-secondary);
+            display: flex; align-items: center; gap: 4px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            min-width: 0;
+        }
+        .network-item .net-icon { font-size: 14px; }
+        .net-value {
+            font-weight: 600; color: var(--text-primary);
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; font-size: 11px;
+        }
+
+        .node-info-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+        .info-chip {
+            font-size: 10px; padding: 3px 8px; border-radius: 8px;
+            background: var(--sakura-light); color: var(--text-muted); white-space: nowrap;
+        }
+
+        .table-view .node-card { padding: 14px 20px; }
+        .table-view .node-row-content {
+            display: grid; grid-template-columns: 2fr repeat(5, 1fr) 1.5fr;
+            gap: 12px; align-items: center;
+        }
+        .table-view .metric-row { margin-bottom: 0; }
+        .table-view .network-row { margin-top: 0; padding-top: 0; border-top: none; }
+        .table-view .node-info-chips { display: none; }
+
+        .table-header {
+            display: grid; grid-template-columns: 2fr repeat(5, 1fr) 1.5fr;
+            gap: 12px; padding: 10px 20px; font-size: 11px; font-weight: 600;
+            color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+        }
+
+        .detail-top-bar {
+            display: flex; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;
+        }
+        .detail-hero {
+            background: var(--card-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--card-border); border-radius: 24px;
+            padding: 28px 32px; margin-bottom: 20px;
+            box-shadow: var(--shadow-card); position: relative; overflow: hidden;
+        }
+        .detail-hero-top {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 16px; margin-bottom: 24px;
+        }
+        .detail-hero-name { display: flex; align-items: center; gap: 14px; }
+        .detail-hero-icon {
+            width: 56px; height: 56px; border-radius: 16px; font-size: 32px;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--sakura-light);
+        }
+        .detail-hero-title { font-size: 24px; font-weight: 700; }
+        .detail-hero-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+        .detail-status-pill {
+            padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 600;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .detail-status-pill.online {
+            background: rgba(126, 203, 154, 0.18); color: #4a9b5e;
+        }
+        .detail-status-pill.offline {
+            background: rgba(255, 137, 160, 0.18); color: #c05060;
+        }
+
+        .detail-gauges {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .gauge-card {
+            background: var(--sakura-light); border-radius: 18px; padding: 20px; text-align: center;
+        }
+        .gauge-icon { font-size: 24px; margin-bottom: 6px; }
+        .gauge-value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+        .gauge-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+        .gauge-bar { height: 10px; background: var(--progress-bg); border-radius: 10px; overflow: hidden; }
+        .gauge-fill {
+            height: 100%; border-radius: 10px;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .gauge-fill.cpu { background: linear-gradient(90deg, #FFB7C5, #FF89A0); }
+        .gauge-fill.ram { background: linear-gradient(90deg, #FFD4A0, #FFB347); }
+        .gauge-fill.disk { background: linear-gradient(90deg, #A8D8EA, #5BA4CF); }
+        .gauge-fill.high { background: linear-gradient(90deg, #FF6B8A, #FF4466); }
+
+        .detail-section { margin-bottom: 20px; }
+        .detail-section-title {
+            font-size: 15px; font-weight: 600; color: var(--text-primary);
+            margin-bottom: 12px; padding-left: 14px; border-left: 3px solid var(--sakura-deep);
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+        }
+        .detail-item {
+            background: var(--card-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--card-border); border-radius: 16px;
+            padding: 16px; text-align: center; box-shadow: var(--shadow-soft);
+        }
+        .detail-item .detail-icon { font-size: 22px; margin-bottom: 6px; }
+        .detail-item .detail-value { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+        .detail-item .detail-label { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
+
+        .detail-realtime-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .realtime-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--card-border); border-radius: 20px;
+            padding: 14px; text-align: center;
+            box-shadow: var(--shadow-card);
+            display: flex; flex-direction: column; align-items: center;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            min-height: 220px;
+        }
+        .realtime-card:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(255, 137, 160, 0.15); }
+        .realtime-card .realtime-icon { font-size: 20px; }
+        .realtime-card .realtime-label { font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 2px 0 4px; }
+        .realtime-card .realtime-value { font-size: 20px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        .realtime-card .realtime-sub { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+        .realtime-card .sparkline {
+            flex: 1; width: 100%; min-height: 80px; margin-top: 4px;
+            border-radius: 6px;
+        }
+        .realtime-card .sparkline-xlabel {
+            font-size: 9px; color: var(--text-muted); margin-top: 1px;
+        }
+        .realtime-split { display: flex; justify-content: space-around; width: 100%; margin-top: 2px; }
+        .realtime-split-item { text-align: center; }
+        .realtime-split-item .split-label { font-size: 10px; color: var(--text-muted); margin-bottom: 1px; }
+        .realtime-split-item .split-value { font-size: 14px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        @media (max-width: 768px) {
+            .detail-realtime-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* Card style: 扁平化 */
+        [data-card-style="扁平化"] .node-card,
+        [data-card-style="扁平化"] .realtime-card,
+        [data-card-style="扁平化"] .detail-hero,
+        [data-card-style="扁平化"] .detail-item,
+        [data-card-style="扁平化"] .chart-card,
+        [data-card-style="扁平化"] .header {
+            backdrop-filter: none; -webkit-backdrop-filter: none;
+        }
+
+        /* Hide history chart section */
+        [data-show-chart="0"] .detail-section:has(.chart-card) { display: none; }
+
+        .chart-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--card-border); border-radius: 20px;
+            padding: 20px; box-shadow: var(--shadow-card);
+        }
+        .chart-card canvas { width: 100%; height: 240px; display: block; }
+        .chart-legend {
+            display: flex; gap: 20px; justify-content: center; margin-top: 10px;
+            font-size: 12px; color: var(--text-muted);
+        }
+        .chart-legend span { display: flex; align-items: center; gap: 5px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+        .footer {
+            text-align: center; padding: 32px 20px; font-size: 12px;
+            color: var(--text-muted); position: relative; z-index: 1;
+        }
+        .footer a {
+            color: var(--sakura-deep); text-decoration: none;
+        }
+        .footer a:hover { text-decoration: underline; }
+
+        .loading { text-align: center; padding: 60px; color: var(--text-muted); }
+        .loading-spinner {
+            width: 40px; height: 40px; margin: 0 auto 16px;
+            border: 3px solid var(--card-border); border-top-color: var(--sakura-deep);
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state { text-align: center; padding: 80px 20px; color: var(--text-muted); }
+        .empty-state .empty-icon { font-size: 56px; margin-bottom: 14px; animation: float 3s ease-in-out infinite; }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .empty-state .empty-text { font-size: 15px; font-weight: 500; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--sakura-pink); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--sakura-deep); }
+
+        @media (max-width: 768px) {
+            .node-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; text-align: center; }
+            .header-right { flex-wrap: wrap; justify-content: center; }
+            .toolbar { justify-content: center; }
+            .table-header { display: none; }
+            .table-view .node-row-content { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .network-row { flex-wrap: wrap; }
+            .detail-gauges { grid-template-columns: 1fr; }
+            .detail-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        [data-tooltip] { position: relative; }
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute; bottom: calc(100% + 6px); left: 50%;
+            transform: translateX(-50%);
+            background: var(--text-primary); color: #fff;
+            padding: 4px 10px; border-radius: 8px; font-size: 11px;
+            white-space: nowrap; z-index: 10; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="petals-canvas"></canvas>
+    <div class="wave-decoration"></div>
+
+    <div class="container">
+        <header class="header">
+            <div class="header-left">
+                <div class="logo-icon">🌸</div>
+                <div>
+                    <div class="site-title" id="siteName">Komari Monitor</div>
+                    <div class="site-subtitle" id="siteDesc">一款轻量级的自托管服务器监控工具</div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="header-stat">
+                    <div class="stat-value" id="totalNodes">0</div>
+                    <div class="stat-label">🌸 总服务器</div>
+                </div>
+                <div class="header-stat">
+                    <div class="stat-value" id="onlineNodes">0</div>
+                    <div class="stat-label">✨ 在线</div>
+                </div>
+                <a href="/admin" class="btn" style="text-decoration:none;" data-tooltip="进入管理后台">🔑 登录后台</a>
+                <button class="btn btn-icon" id="btnTheme" data-tooltip="切换明暗主题" aria-label="切换主题">🌙</button>
+                <button class="btn btn-icon" id="btnRefresh" data-tooltip="刷新数据" aria-label="刷新">🔄</button>
+            </div>
+        </header>
+
+        <div class="page-list" id="pageList">
+            <div class="toolbar" id="toolbar">
+                <div class="group-filter" id="groupFilter">
+                    <span class="group-tag active" data-group="all">🌸 全部</span>
+                </div>
+                <button class="btn" id="btnViewMode">
+                    <span id="viewModeIcon">🔲</span>
+                    <span id="viewModeText">网格视图</span>
+                </button>
+            </div>
+            <div class="node-grid" id="nodeGrid">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <div>正在连接服务器…</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-detail" id="pageDetail">
+            <div class="detail-top-bar">
+                <button class="btn btn-back" id="btnBack">
+                    <span>←</span> 返回服务器列表
+                </button>
+            </div>
+            <div id="detailContent"></div>
+        </div>
+
+        <div class="footer">Powered by Komari Monitor &amp; <a href="https://github.com/Nas32op" target="_blank" rel="noopener">小绫</a></div>
+    </div>
+
+    <script>
+    (function() {
+        let PETAL_COUNT = 30;
+        const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/clients';
+        let REFRESH_INTERVAL = 5000;
+
+        let nodesData = [];
+        let realtimeData = {};
+        let onlineNodes = new Set();
+        let petalSpeedMultiplier = 1.0;
+        let selectedGroup = localStorage.getItem('nodeSelectedGroup') || 'all';
+        let viewMode = localStorage.getItem('nodeViewMode') || 'grid';
+        let appearance = localStorage.getItem('appearance') || 'system';
+        let currentPage = 'list';
+        let selectedUuid = null;
+        let ws = null;
+
+        const $ = (id) => document.getElementById(id);
+        const $nodeGrid = $('nodeGrid');
+        const $groupFilter = $('groupFilter');
+        const $totalNodes = $('totalNodes');
+        const $onlineNodes = $('onlineNodes');
+        const $btnTheme = $('btnTheme');
+        const $btnRefresh = $('btnRefresh');
+        const $btnViewMode = $('btnViewMode');
+        const $viewModeIcon = $('viewModeIcon');
+        const $viewModeText = $('viewModeText');
+        const $siteName = $('siteName');
+        const $siteDesc = $('siteDesc');
+        const $detailContent = $('detailContent');
+        const $btnBack = $('btnBack');
+        const petalsCanvas = $('petals-canvas');
+
+        function applyTheme(mode) {
+            if (mode === 'system') {
+                mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-theme', mode);
+            $btnTheme.textContent = mode === 'dark' ? '☀️' : '🌙';
+            localStorage.setItem('appearance', appearance);
+        }
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'light';
+            appearance = current === 'dark' ? 'light' : 'dark';
+            applyTheme(appearance);
+        }
+        applyTheme(appearance);
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            if (appearance === 'system') applyTheme('system');
+        });
+        $btnTheme.addEventListener('click', toggleTheme);
+
+        const ctx = petalsCanvas.getContext('2d');
+        let petals = [], animId;
+
+        function resizeCanvas() {
+            petalsCanvas.width = window.innerWidth;
+            petalsCanvas.height = window.innerHeight;
+        }
+        function createPetal() {
+            const spd = petalSpeedMultiplier;
+            return {
+                x: Math.random() * petalsCanvas.width,
+                y: -20 - Math.random() * petalsCanvas.height,
+                size: 8 + Math.random() * 16,
+                speedX: (-0.5 + Math.random() * 1) * spd,
+                speedY: (0.8 + Math.random() * 2.5) * spd,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.03 * spd,
+                opacity: 0.3 + Math.random() * 0.5,
+                wobble: Math.random() * Math.PI * 2,
+                wobbleSpeed: (0.01 + Math.random() * 0.03) * spd,
+            };
+        }
+        function initPetals() {
+            petals = [];
+            for (let i = 0; i < PETAL_COUNT; i++) {
+                const p = createPetal();
+                p.y = Math.random() * petalsCanvas.height;
+                petals.push(p);
+            }
+        }
+        function drawPetal(p) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+            ctx.globalAlpha = p.opacity;
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const color = isDark ? '255, 160, 180' : '255, 183, 197';
+            ctx.beginPath();
+            const s = p.size;
+            ctx.moveTo(0, -s * 0.3);
+            ctx.bezierCurveTo(s * 0.5, -s * 0.8, s * 0.8, -s * 0.3, 0, s * 0.8);
+            ctx.bezierCurveTo(-s * 0.8, -s * 0.3, -s * 0.5, -s * 0.8, 0, -s * 0.3);
+            ctx.closePath();
+            const gradient = ctx.createLinearGradient(0, -s, 0, s);
+            gradient.addColorStop(0, `rgba(${color}, ${p.opacity + 0.2})`);
+            gradient.addColorStop(0.5, `rgba(${color}, ${p.opacity})`);
+            gradient.addColorStop(1, `rgba(${color}, ${p.opacity - 0.15})`);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(0, -s * 0.2);
+            ctx.lineTo(0, s * 0.6);
+            ctx.strokeStyle = `rgba(${color}, 0.15)`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+            ctx.restore();
+        }
+        function animatePetals() {
+            ctx.clearRect(0, 0, petalsCanvas.width, petalsCanvas.height);
+            for (const p of petals) {
+                p.wobble += p.wobbleSpeed;
+                p.x += p.speedX + Math.sin(p.wobble) * 0.4;
+                p.y += p.speedY;
+                p.rotation += p.rotationSpeed;
+                if (p.y > petalsCanvas.height + 30) { p.y = -30; p.x = Math.random() * petalsCanvas.width; }
+                if (p.x > petalsCanvas.width + 30) p.x = -30;
+                if (p.x < -30) p.x = petalsCanvas.width + 30;
+                drawPetal(p);
+            }
+            animId = requestAnimationFrame(animatePetals);
+        }
+        resizeCanvas(); initPetals(); animatePetals();
+        window.addEventListener('resize', () => { resizeCanvas(); initPetals(); });
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+        function formatSpeed(bps) { return formatBytes(bps) + '/s'; }
+        function formatUptime(seconds) {
+            if (!seconds || seconds < 0) return '--';
+            const d = Math.floor(seconds / 86400);
+            const h = Math.floor((seconds % 86400) / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const parts = [];
+            if (d > 0) parts.push(d + '天');
+            if (h > 0) parts.push(h + '时');
+            if (m > 0) parts.push(m + '分');
+            return parts.length > 0 ? parts.join(' ') : '刚刚启动';
+        }
+        function getPercent(used, total) {
+            if (!total || total === 0) return 0;
+            return Math.min(100, (used / total) * 100);
+        }
+        function getProgressClass(pct) { return pct > 90 ? 'high' : ''; }
+        function getOSIcon(os) {
+            const lower = (os || '').toLowerCase();
+            if (lower.includes('debian') || lower.includes('ubuntu')) return '🐧';
+            if (lower.includes('centos') || lower.includes('rhel') || lower.includes('fedora')) return '🎩';
+            if (lower.includes('windows')) return '🪟';
+            if (lower.includes('arch')) return '🏹';
+            if (lower.includes('alpine')) return '🏔️';
+            return '🖥️';
+        }
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        const MAX_SPARK_POINTS = 60;
+        const sparkData = { cpu: [], process: [], disk: [], ram: [], netUp: [], netDown: [], tcp: [], udp: [] };
+
+        function pushSparkData(key, value) {
+            sparkData[key].push(value);
+            if (sparkData[key].length > MAX_SPARK_POINTS) sparkData[key].shift();
+        }
+
+        function drawSparkline(canvasId, datasets) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const totalLen = datasets.reduce((s, d) => s + d.data.length, 0);
+            if (totalLen < 2) { canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height); return; }
+
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            const w = canvas.width = rect.width * dpr;
+            const h = canvas.height = rect.height * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            const cw = rect.width, ch = rect.height;
+            const padLeft = 30, padRight = 4, padY = 4, padBottom = 6;
+            const pw = cw - padLeft - padRight;
+            const ph = ch - padY - padBottom;
+
+            ctx.clearRect(0, 0, cw, ch);
+
+            let gMin = Infinity, gMax = -Infinity;
+            datasets.forEach(ds => {
+                ds.data.forEach(v => { if (v < gMin) gMin = v; if (v > gMax) gMax = v; });
+            });
+            const range = gMax - gMin || 1;
+
+            // Grid lines at 0%, 25%, 50%, 75%, 100%
+            const gridStyle = 'rgba(128,128,128,0.1)';
+            for (let i = 0; i <= 4; i++) {
+                const y = padY + (ph / 4) * i;
+                ctx.strokeStyle = i === 0 || i === 4 ? 'rgba(128,128,128,0.15)' : gridStyle;
+                ctx.lineWidth = 0.5;
+                ctx.setLineDash(i === 2 ? [3, 4] : []);
+                ctx.beginPath();
+                ctx.moveTo(padLeft, y);
+                ctx.lineTo(cw - padRight, y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Y-axis labels (right-aligned inside padLeft)
+                const pct = 100 - i * 25;
+                const val = gMin + (range * pct / 100);
+                const label = val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val.toFixed(1);
+                ctx.fillStyle = 'rgba(128,128,128,0.55)';
+                ctx.font = '9px sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText(label, padLeft - 4, y + 3);
+            }
+
+            // X-axis label (bottom center)
+            ctx.fillStyle = 'rgba(128,128,128,0.45)';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'center';
+            const xlabel = canvas.nextElementSibling;
+            if (xlabel && xlabel.classList.contains('sparkline-xlabel')) {
+                ctx.fillText(xlabel.textContent, cw / 2, ch - 1);
+            }
+
+            datasets.forEach(ds => {
+                if (ds.data.length < 2) return;
+                ctx.beginPath();
+                ctx.strokeStyle = ds.color;
+                ctx.lineWidth = 1.5;
+                ctx.lineJoin = 'round';
+                for (let i = 0; i < ds.data.length; i++) {
+                    const x = padLeft + (pw / (ds.data.length - 1)) * i;
+                    const y = padY + ph - ((ds.data[i] - gMin) / range) * ph;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+
+                if (ds === datasets[0]) {
+                    ctx.lineTo(padLeft + pw, ch - padBottom);
+                    ctx.lineTo(padLeft, ch - padBottom);
+                    ctx.closePath();
+                    const grad = ctx.createLinearGradient(0, padY, 0, ch - padBottom);
+                    grad.addColorStop(0, ds.color + '30');
+                    grad.addColorStop(1, ds.color + '03');
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                }
+            });
+        }
+
+        function seedSparklines() {
+            const rt = realtimeData[selectedUuid] || {};
+            const cpuPct = (rt.cpu && rt.cpu.usage) || 0;
+            const ramPct = getPercent((rt.ram && rt.ram.used) || 0, (rt.ram && rt.ram.total) || 0);
+            const diskPct = getPercent((rt.disk && rt.disk.used) || 0, (rt.disk && rt.disk.total) || 0);
+            pushSparkData('cpu', cpuPct);
+            pushSparkData('process', rt.process || 0);
+            pushSparkData('disk', diskPct);
+            pushSparkData('ram', ramPct);
+            pushSparkData('netUp', (rt.network && rt.network.up) || 0);
+            pushSparkData('netDown', (rt.network && rt.network.down) || 0);
+            pushSparkData('tcp', (rt.connections && rt.connections.tcp) || 0);
+            pushSparkData('udp', (rt.connections && rt.connections.udp) || 0);
+        }
+
+        async function fetchSiteInfo() {
+            try {
+                const resp = await fetch('/api/public');
+                const json = await resp.json();
+                if (json.status === 'success' && json.data) {
+                    document.title = json.data.sitename || 'Komari Monitor';
+                    $siteName.textContent = json.data.sitename || 'Komari Monitor';
+                    $siteDesc.textContent = json.data.description || '一款轻量级的自托管服务器监控工具';
+                    const ts = json.data.theme_settings || {};
+                    if (ts.sakura_petal_speed != null) {
+                        const spd = Number(ts.sakura_petal_speed);
+                        petalSpeedMultiplier = Math.max(0.1, Math.min(10, spd)) / 5;
+                        initPetals();
+                    }
+                    if (ts.sakura_petal_count != null) {
+                        const count = Number(ts.sakura_petal_count);
+                        PETAL_COUNT = Math.max(5, Math.min(60, count));
+                        initPetals();
+                    }
+                    if (ts.card_style != null) {
+                        document.body.setAttribute('data-card-style', ts.card_style);
+                    }
+                    if (ts.auto_refresh_interval != null) {
+                        REFRESH_INTERVAL = Math.max(2000, Math.min(60000, Number(ts.auto_refresh_interval) * 1000));
+                    }
+                    if (ts.show_history_chart != null) {
+                        document.body.setAttribute('data-show-chart', ts.show_history_chart ? '1' : '0');
+                    }
+                }
+            } catch (e) { }
+        }
+
+        async function fetchNodes() {
+            try {
+                const resp = await fetch('/api/nodes');
+                const json = await resp.json();
+                if (json.status === 'success') {
+                    nodesData = json.data || [];
+                    updateGroupFilters();
+                    if (currentPage === 'list') renderList();
+                }
+            } catch (e) {
+                if (nodesData.length === 0 && currentPage === 'list') {
+                    $nodeGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">🔌</div><div class="empty-text">无法连接到服务器</div><div style="font-size:12px;margin-top:6px;">请检查网络连接后刷新重试</div></div>';
+                }
+            }
+        }
+
+        function updateGroupFilters() {
+            const groups = new Set();
+            nodesData.forEach(n => { if (n.group) groups.add(n.group); });
+            let html = '<span class="group-tag' + (selectedGroup === 'all' ? ' active' : '') + '" data-group="all">🌸 全部</span>';
+            groups.forEach(g => {
+                html += '<span class="group-tag' + (selectedGroup === g ? ' active' : '') + '" data-group="' + escapeHtml(g) + '">' + escapeHtml(g) + '</span>';
+            });
+            $groupFilter.innerHTML = html;
+            $groupFilter.querySelectorAll('.group-tag').forEach(tag => {
+                tag.addEventListener('click', function() {
+                    selectedGroup = this.dataset.group;
+                    localStorage.setItem('nodeSelectedGroup', selectedGroup);
+                    updateGroupFilters();
+                    renderList();
+                });
+            });
+        }
+
+        function getFilteredNodes() {
+            if (selectedGroup === 'all') return nodesData;
+            return nodesData.filter(n => n.group === selectedGroup);
+        }
+
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket(WS_URL);
+                ws.onopen = function() {
+                    ws.send('get');
+                    setInterval(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) ws.send('get');
+                    }, REFRESH_INTERVAL);
+                };
+                ws.onmessage = function(event) {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.status === 'success' && msg.data) {
+                            onlineNodes = new Set(msg.data.online || []);
+                            realtimeData = msg.data.data || {};
+                            updateLiveMetrics();
+                            updateHeaderStats();
+                        }
+                    } catch (e) {}
+                };
+                ws.onclose = function() {
+                    setTimeout(connectWebSocket, 3000);
+                    pollRecentData();
+                };
+            } catch (e) {
+                setTimeout(connectWebSocket, 5000);
+            }
+        }
+
+        async function pollRecentData() {
+            if (ws && ws.readyState === WebSocket.OPEN) return;
+            const promises = nodesData.map(async (node) => {
+                try {
+                    const resp = await fetch('/api/recent/' + node.uuid);
+                    const json = await resp.json();
+                    if (json.status === 'success' && json.data && json.data.length > 0) {
+                        realtimeData[node.uuid] = json.data[json.data.length - 1];
+                        onlineNodes.add(node.uuid);
+                    }
+                } catch (e) {}
+            });
+            await Promise.allSettled(promises);
+            updateLiveMetrics();
+            updateHeaderStats();
+        }
+
+        function updateLiveMetrics() {
+            if (currentPage === 'list') {
+                document.querySelectorAll('.node-card[data-uuid]').forEach(card => {
+                    const uuid = card.dataset.uuid;
+                    const isOnline = onlineNodes.has(uuid);
+                    const rt = realtimeData[uuid] || {};
+
+                    const dot = card.querySelector('.node-status-dot');
+                    if (dot) {
+                        dot.className = 'node-status-dot' + (isOnline ? '' : ' offline');
+                    }
+
+                    if (isOnline) card.classList.remove('offline');
+                    else card.classList.add('offline');
+
+                    const cpuPct = (rt.cpu && rt.cpu.usage) || 0;
+                    const cpuFill = card.querySelector('.progress-fill.cpu');
+                    const cpuVal = card.querySelector('.metric-value.cpu-val');
+                    if (cpuFill) { cpuFill.style.width = cpuPct + '%'; cpuFill.className = 'progress-fill cpu ' + getProgressClass(cpuPct); }
+                    if (cpuVal) cpuVal.textContent = cpuPct.toFixed(1) + '%';
+
+                    const ramUsed = (rt.ram && rt.ram.used) || 0;
+                    const ramTotal = (rt.ram && rt.ram.total) || 0;
+                    const ramPct = getPercent(ramUsed, ramTotal);
+                    const ramFill = card.querySelector('.progress-fill.ram');
+                    const ramVal = card.querySelector('.metric-value.ram-val');
+                    if (ramFill) { ramFill.style.width = ramPct + '%'; ramFill.className = 'progress-fill ram ' + getProgressClass(ramPct); }
+                    if (ramVal) ramVal.textContent = formatBytes(ramUsed) + ' / ' + formatBytes(ramTotal);
+
+                    const diskUsed = (rt.disk && rt.disk.used) || 0;
+                    const diskTotal = (rt.disk && rt.disk.total) || 0;
+                    const diskPct = getPercent(diskUsed, diskTotal);
+                    const diskFill = card.querySelector('.progress-fill.disk');
+                    const diskVal = card.querySelector('.metric-value.disk-val');
+                    if (diskFill) { diskFill.style.width = diskPct + '%'; diskFill.className = 'progress-fill disk ' + getProgressClass(diskPct); }
+                    if (diskVal) diskVal.textContent = formatBytes(diskUsed) + ' / ' + formatBytes(diskTotal);
+
+                    const netUp = (rt.network && rt.network.up) || 0;
+                    const netDown = (rt.network && rt.network.down) || 0;
+                    const netUpEl = card.querySelector('.net-up');
+                    const netDownEl = card.querySelector('.net-down');
+                    const netUptimeEl = card.querySelector('.net-uptime');
+                    if (netUpEl) netUpEl.textContent = formatSpeed(netUp);
+                    if (netDownEl) netDownEl.textContent = formatSpeed(netDown);
+                    if (netUptimeEl) netUptimeEl.textContent = formatUptime(rt.uptime || 0);
+                });
+
+            } else if (currentPage === 'detail' && selectedUuid) {
+                const rt = realtimeData[selectedUuid] || {};
+                const isOnline = onlineNodes.has(selectedUuid);
+
+                const pill = document.querySelector('.detail-status-pill');
+                if (pill) {
+                    pill.className = 'detail-status-pill ' + (isOnline ? 'online' : 'offline');
+                    pill.innerHTML = (isOnline ? '🟢' : '🔴') + ' <span>' + (isOnline ? '在线' : '离线') + '</span>';
+                }
+
+                const cpuPct = (rt.cpu && rt.cpu.usage) || 0;
+                const ramUsed = (rt.ram && rt.ram.used) || 0;
+                const ramTotal = (rt.ram && rt.ram.total) || 0;
+                const ramPct = getPercent(ramUsed, ramTotal);
+                const diskUsed = (rt.disk && rt.disk.used) || 0;
+                const diskTotal = (rt.disk && rt.disk.total) || 0;
+                const diskPct = getPercent(diskUsed, diskTotal);
+                const swapUsed = (rt.swap && rt.swap.used) || 0;
+                const swapTotal = (rt.swap && rt.swap.total) || 0;
+
+                pushSparkData('cpu', cpuPct);
+                pushSparkData('process', rt.process || 0);
+                pushSparkData('disk', diskPct);
+                pushSparkData('ram', ramPct);
+                const netUp = (rt.network && rt.network.up) || 0;
+                const netDown = (rt.network && rt.network.down) || 0;
+                pushSparkData('netUp', netUp);
+                pushSparkData('netDown', netDown);
+                pushSparkData('tcp', (rt.connections && rt.connections.tcp) || 0);
+                pushSparkData('udp', (rt.connections && rt.connections.udp) || 0);
+
+                drawSparkline('spark-cpu', [{ data: sparkData.cpu, color: '#FF89A0' }]);
+                drawSparkline('spark-process', [{ data: sparkData.process, color: '#C77DFF' }]);
+                drawSparkline('spark-disk', [{ data: sparkData.disk, color: '#5BA4CF' }]);
+                drawSparkline('spark-ram', [{ data: sparkData.ram, color: '#FFB347' }]);
+                drawSparkline('spark-net', [
+                    { data: sparkData.netUp, color: '#7ECB9A' },
+                    { data: sparkData.netDown, color: '#5BA4CF' }
+                ]);
+                drawSparkline('spark-conn', [
+                    { data: sparkData.tcp, color: '#FF89A0' },
+                    { data: sparkData.udp, color: '#FFB347' }
+                ]);
+
+                updateDetailVal('val-cpu', cpuPct.toFixed(1) + '%');
+                updateDetailVal('val-process', rt.process || '--');
+                updateDetailVal('val-disk', diskPct.toFixed(1) + '%');
+                updateDetailVal('val-disk-detail', formatBytes(diskUsed) + ' / ' + formatBytes(diskTotal));
+                updateDetailVal('val-ram', ramPct.toFixed(1) + '%');
+                updateDetailVal('val-ram-detail', formatBytes(ramUsed) + ' / ' + formatBytes(ramTotal));
+                updateDetailVal('val-swap', formatBytes(swapUsed) + ' / ' + formatBytes(swapTotal));
+                updateDetailVal('val-netup', formatSpeed(netUp));
+                updateDetailVal('val-netdown', formatSpeed(netDown));
+                updateDetailVal('val-tcp', (rt.connections && rt.connections.tcp) || '0');
+                updateDetailVal('val-udp', (rt.connections && rt.connections.udp) || '0');
+                updateDetailVal('val-uptime', formatUptime(rt.uptime || 0));
+                updateDetailVal('val-uptime2', formatUptime(rt.uptime || 0));
+            }
+
+            updateHeaderStats();
+        }
+
+        function updateDetailVal(id, text) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        }
+
+        function updateHeaderStats() {
+            const filtered = getFilteredNodes();
+            const onlineCount = filtered.filter(n => onlineNodes.has(n.uuid)).length;
+            $totalNodes.textContent = filtered.length;
+            $onlineNodes.textContent = onlineCount;
+        }
+
+        function renderList() {
+            const filtered = getFilteredNodes();
+            updateHeaderStats();
+
+            if (filtered.length === 0) {
+                $nodeGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">🌸</div><div class="empty-text">暂无服务器</div><div style="font-size:12px;margin-top:6px;">此分组下没有服务器节点</div></div>';
+                return;
+            }
+
+            if (viewMode === 'table') {
+                renderTableView(filtered);
+            } else {
+                renderGridView(filtered);
+            }
+
+            document.querySelectorAll('.node-card[data-uuid]').forEach(card => {
+                card.addEventListener('click', function(e) {
+                    if (e.target.closest('button') || e.target.closest('a')) return;
+                    navigateToDetail(this.dataset.uuid);
+                });
+            });
+        }
+
+        function renderGridView(nodes) {
+            $nodeGrid.className = 'node-grid';
+            let html = '';
+            nodes.forEach(node => {
+                const isOnline = onlineNodes.has(node.uuid);
+                const rt = realtimeData[node.uuid] || {};
+                const cpu = rt.cpu || {};
+                const ram = rt.ram || {};
+                const disk = rt.disk || {};
+                const net = rt.network || {};
+                const cpuPct = cpu.usage || 0;
+                const ramPct = getPercent(ram.used, ram.total);
+                const diskPct = getPercent(disk.used, disk.total);
+                const uptime = rt.uptime || 0;
+
+                html += `
+                <div class="node-card${isOnline ? '' : ' offline'}" data-uuid="${node.uuid}">
+                    <div class="node-card-header">
+                        <div class="node-name-section">
+                            <div class="node-os-icon">${getOSIcon(node.os)}</div>
+                            <div>
+                                <div class="node-name">${escapeHtml(node.name)}</div>
+                                ${node.group ? '<span class="node-group-badge">' + escapeHtml(node.group) + '</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="node-status-dot${isOnline ? '' : ' offline'}"></div>
+                    </div>
+                    <div class="node-info-chips">
+                        ${node.cpu_name ? '<span class="info-chip">💻 ' + escapeHtml(node.cpu_name) + '</span>' : ''}
+                        ${node.cpu_cores ? '<span class="info-chip">🔢 ' + node.cpu_cores + ' 核</span>' : ''}
+                        ${node.os ? '<span class="info-chip">🖥️ ' + escapeHtml((node.os.split('(')[0] || node.os).trim()) + '</span>' : ''}
+                        ${node.region ? '<span class="info-chip">📍 ' + escapeHtml(node.region) + '</span>' : ''}
+                        ${node.arch ? '<span class="info-chip">🏗️ ' + escapeHtml(node.arch) + '</span>' : ''}
+                    </div>
+                    <div class="metric-row">
+                        <div class="metric-label">
+                            <span class="metric-name">🎯 CPU</span>
+                            <span class="metric-value cpu-val">${cpuPct.toFixed(1)}%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill cpu ${getProgressClass(cpuPct)}" style="width:${cpuPct}%"></div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <div class="metric-label">
+                            <span class="metric-name">💾 内存</span>
+                            <span class="metric-value ram-val">${formatBytes(ram.used)} / ${formatBytes(ram.total)}</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill ram ${getProgressClass(ramPct)}" style="width:${ramPct}%"></div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <div class="metric-label">
+                            <span class="metric-name">💿 磁盘</span>
+                            <span class="metric-value disk-val">${formatBytes(disk.used)} / ${formatBytes(disk.total)}</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill disk ${getProgressClass(diskPct)}" style="width:${diskPct}%"></div>
+                        </div>
+                    </div>
+                    ${isOnline ? `
+                    <div class="network-row">
+                        <div class="network-item"><span class="net-icon">⬆️</span> 上传 <span class="net-value net-up">${formatSpeed(net.up || 0)}</span></div>
+                        <div class="network-item"><span class="net-icon">⬇️</span> 下载 <span class="net-value net-down">${formatSpeed(net.down || 0)}</span></div>
+                        <div class="network-item"><span class="net-icon">⏱️</span> 运行 <span class="net-value net-uptime">${formatUptime(uptime)}</span></div>
+                    </div>
+                    ` : '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border);font-size:12px;color:var(--text-muted);text-align:center;">暂无实时数据</div>'}
+                </div>`;
+            });
+            $nodeGrid.innerHTML = html;
+        }
+
+        function renderTableView(nodes) {
+            $nodeGrid.className = 'node-grid table-view';
+            let html = `
+            <div class="table-header">
+                <span>服务器</span><span>CPU</span><span>内存</span><span>磁盘</span><span>网络 ↑/↓</span><span>运行时间</span><span>状态</span>
+            </div>`;
+            nodes.forEach(node => {
+                const isOnline = onlineNodes.has(node.uuid);
+                const rt = realtimeData[node.uuid] || {};
+                const cpu = rt.cpu || {};
+                const ram = rt.ram || {};
+                const disk = rt.disk || {};
+                const net = rt.network || {};
+                const cpuPct = cpu.usage || 0;
+                const ramPct = getPercent(ram.used, ram.total);
+                const diskPct = getPercent(disk.used, disk.total);
+                const uptime = rt.uptime || 0;
+
+                html += `
+                <div class="node-card${isOnline ? '' : ' offline'}" data-uuid="${node.uuid}">
+                    <div class="node-row-content">
+                        <div class="node-name-section">
+                            <div class="node-os-icon">${getOSIcon(node.os)}</div>
+                            <div>
+                                <div class="node-name">${escapeHtml(node.name)}</div>
+                                ${node.group ? '<span class="node-group-badge">' + escapeHtml(node.group) + '</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label"><span class="metric-value cpu-val">${cpuPct.toFixed(1)}%</span></div>
+                            <div class="progress-bar"><div class="progress-fill cpu ${getProgressClass(cpuPct)}" style="width:${cpuPct}%"></div></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label"><span class="metric-value ram-val">${ramPct.toFixed(1)}%</span></div>
+                            <div class="progress-bar"><div class="progress-fill ram ${getProgressClass(ramPct)}" style="width:${ramPct}%"></div></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label"><span class="metric-value disk-val">${diskPct.toFixed(1)}%</span></div>
+                            <div class="progress-bar"><div class="progress-fill disk ${getProgressClass(diskPct)}" style="width:${diskPct}%"></div></div>
+                        </div>
+                        <div class="network-row">
+                            <div class="network-item">⬆️<span class="net-value net-up">${formatSpeed(net.up || 0)}</span></div>
+                            <div class="network-item">⬇️<span class="net-value net-down">${formatSpeed(net.down || 0)}</span></div>
+                        </div>
+                        <div style="font-size:12px;color:var(--text-muted);"><span class="net-uptime">${formatUptime(uptime)}</span></div>
+                        <div><div class="node-status-dot${isOnline ? '' : ' offline'}"></div></div>
+                    </div>
+                </div>`;
+            });
+            $nodeGrid.innerHTML = html;
+        }
+
+        function navigateToDetail(uuid) {
+            selectedUuid = uuid;
+            currentPage = 'detail';
+            document.body.classList.add('is-detail');
+            for (const key in sparkData) sparkData[key] = [];
+            renderDetail();
+            setTimeout(() => loadHistoryChart(uuid), 150);
+        }
+
+        function navigateToList() {
+            currentPage = 'list';
+            selectedUuid = null;
+            document.body.classList.remove('is-detail');
+            renderList();
+        }
+
+        $btnBack.addEventListener('click', navigateToList);
+
+        function renderDetail() {
+            const node = nodesData.find(n => n.uuid === selectedUuid);
+            if (!node) { $detailContent.innerHTML = '<div class="empty-state"><div class="empty-text">服务器信息未找到</div></div>'; return; }
+
+            const isOnline = onlineNodes.has(selectedUuid);
+            const rt = realtimeData[selectedUuid] || {};
+            const cpu = rt.cpu || {};
+            const ram = rt.ram || {};
+            const disk = rt.disk || {};
+            const swap = rt.swap || {};
+            const net = rt.network || {};
+            const load = rt.load || {};
+            const cpuPct = cpu.usage || 0;
+            const ramPct = getPercent(ram.used, ram.total);
+            const diskPct = getPercent(disk.used, disk.total);
+            const uptime = rt.uptime || 0;
+
+            $detailContent.innerHTML = `
+            <div class="detail-hero">
+                <div class="detail-hero-top">
+                    <div class="detail-hero-name">
+                        <div class="detail-hero-icon">${getOSIcon(node.os)}</div>
+                        <div>
+                            <div class="detail-hero-title">${escapeHtml(node.name)}</div>
+                            <div class="detail-hero-subtitle">
+                                ${node.os ? escapeHtml(node.os) : ''}
+                                ${node.group ? ' · <span style="background:linear-gradient(135deg,var(--sakura-pink),var(--sakura-deep));color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;">' + escapeHtml(node.group) + '</span>' : ''}
+                                · <span id="val-uptime">${formatUptime(uptime)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="detail-status-pill ${isOnline ? 'online' : 'offline'}">
+                        ${isOnline ? '🟢' : '🔴'} <span>${isOnline ? '在线' : '离线'}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-title">📊 实时监控</div>
+                <div class="detail-realtime-grid">
+                    <div class="realtime-card">
+                        <div class="realtime-icon">🎯</div>
+                        <div class="realtime-label">CPU 使用率</div>
+                        <div class="realtime-value" id="val-cpu">${cpuPct.toFixed(1)}%</div>
+                        <canvas class="sparkline" id="spark-cpu"></canvas>
+                        <div class="sparkline-xlabel">CPU %</div>
+                    </div>
+                    <div class="realtime-card">
+                        <div class="realtime-icon">📦</div>
+                        <div class="realtime-label">进程数</div>
+                        <div class="realtime-value" id="val-process">${rt.process || '--'}</div>
+                        <div class="realtime-sub">运行 <span id="val-uptime2">${formatUptime(uptime)}</span></div>
+                        <canvas class="sparkline" id="spark-process"></canvas>
+                        <div class="sparkline-xlabel">进程数</div>
+                    </div>
+                    <div class="realtime-card">
+                        <div class="realtime-icon">💿</div>
+                        <div class="realtime-label">磁盘使用</div>
+                        <div class="realtime-value" id="val-disk">${diskPct.toFixed(1)}%</div>
+                        <div class="realtime-sub" id="val-disk-detail">${formatBytes(disk.used)} / ${formatBytes(disk.total)}</div>
+                        <canvas class="sparkline" id="spark-disk"></canvas>
+                        <div class="sparkline-xlabel">磁盘 %</div>
+                    </div>
+                    <div class="realtime-card">
+                        <div class="realtime-icon">💾</div>
+                        <div class="realtime-label">内存 / Swap</div>
+                        <div class="realtime-value" id="val-ram">${ramPct.toFixed(1)}%</div>
+                        <div class="realtime-sub" id="val-ram-detail">${formatBytes(ram.used)} / ${formatBytes(ram.total)}</div>
+                        <div class="realtime-sub">Swap <span id="val-swap">${formatBytes(swap.used || 0)}</span></div>
+                        <canvas class="sparkline" id="spark-ram"></canvas>
+                        <div class="sparkline-xlabel">内存 %</div>
+                    </div>
+                    <div class="realtime-card">
+                        <div class="realtime-icon">🌐</div>
+                        <div class="realtime-label">网络速度</div>
+                        <div class="realtime-split">
+                            <div class="realtime-split-item">
+                                <div class="split-label">⬆️ 上传</div>
+                                <div class="split-value" id="val-netup">${formatSpeed(net.up || 0)}</div>
+                            </div>
+                            <div class="realtime-split-item">
+                                <div class="split-label">⬇️ 下载</div>
+                                <div class="split-value" id="val-netdown">${formatSpeed(net.down || 0)}</div>
+                            </div>
+                        </div>
+                        <canvas class="sparkline" id="spark-net"></canvas>
+                        <div class="sparkline-xlabel">B/s</div>
+                    </div>
+                    <div class="realtime-card">
+                        <div class="realtime-icon">🔗</div>
+                        <div class="realtime-label">网络连接</div>
+                        <div class="realtime-split">
+                            <div class="realtime-split-item">
+                                <div class="split-label">TCP</div>
+                                <div class="split-value" id="val-tcp">${rt.connections ? rt.connections.tcp || 0 : '--'}</div>
+                            </div>
+                            <div class="realtime-split-item">
+                                <div class="split-label">UDP</div>
+                                <div class="split-value" id="val-udp">${rt.connections ? rt.connections.udp || 0 : '--'}</div>
+                            </div>
+                        </div>
+                        <canvas class="sparkline" id="spark-conn"></canvas>
+                        <div class="sparkline-xlabel">连接数</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-title">🖥️ 系统信息</div>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <div class="detail-icon">💻</div>
+                        <div class="detail-value">${escapeHtml(node.cpu_name || '--')}</div>
+                        <div class="detail-label">CPU 型号</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-icon">🔢</div>
+                        <div class="detail-value">${node.cpu_cores || '--'} 核</div>
+                        <div class="detail-label">CPU 核心数</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-icon">🖥️</div>
+                        <div class="detail-value">${escapeHtml(node.os || '--')}</div>
+                        <div class="detail-label">操作系统</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-icon">🐧</div>
+                        <div class="detail-value">${escapeHtml(node.kernel_version || '--')}</div>
+                        <div class="detail-label">内核版本</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-icon">🏗️</div>
+                        <div class="detail-value">${escapeHtml(node.arch || '--')}</div>
+                        <div class="detail-label">系统架构</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-icon">💻</div>
+                        <div class="detail-value">${escapeHtml(node.virtualization || '--')}</div>
+                        <div class="detail-label">虚拟化类型</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-icon">🎮</div>
+                        <div class="detail-value">${escapeHtml((node.gpu_name && node.gpu_name !== 'None') ? node.gpu_name : '无')}</div>
+                        <div class="detail-label">GPU</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-icon">📍</div>
+                        <div class="detail-value">${escapeHtml(node.region || '--')}</div>
+                        <div class="detail-label">地区</div>
+                    </div>
+                    ${node.tags ? `
+                    <div class="detail-item">
+                        <div class="detail-icon">🏷️</div>
+                        <div class="detail-value" style="font-size:12px;">${escapeHtml(node.tags.split(';').filter(Boolean).join(' · '))}</div>
+                        <div class="detail-label">自定义标签</div>
+                    </div>` : ''}
+                    ${node.public_remark ? `
+                    <div class="detail-item">
+                        <div class="detail-icon">📝</div>
+                        <div class="detail-value" style="font-size:12px;">${escapeHtml(node.public_remark)}</div>
+                        <div class="detail-label">公开备注</div>
+                    </div>` : ''}
+                </div>
+            </div>
+
+            ${(node.price != null && node.price !== 0) ? `
+            <div class="detail-section">
+                <div class="detail-section-title">💰 费用信息</div>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <div class="detail-icon">💵</div>
+                        <div class="detail-value">${node.price === -1 ? '免费' : (node.currency || '$') + ' ' + node.price}</div>
+                        <div class="detail-label">${node.billing_cycle ? '每 ' + node.billing_cycle + ' 天' : '价格'}</div>
+                    </div>
+                    ${(node.expired_at && !/^0001/.test(node.expired_at)) ? `
+                    <div class="detail-item">
+                        <div class="detail-icon">📅</div>
+                        <div class="detail-value">${new Date(node.expired_at).toLocaleDateString('zh-CN')}</div>
+                        <div class="detail-label">到期时间</div>
+                    </div>` : ''}
+                    ${node.auto_renewal ? '<div class="detail-item"><div class="detail-icon">🔄</div><div class="detail-value">已启用</div><div class="detail-label">自动续费</div></div>' : ''}
+                </div>
+            </div>` : ''}
+
+            <div class="detail-section">
+                <div class="detail-section-title">📈 历史负载（近2小时）</div>
+                <div class="chart-card">
+                    <canvas id="canvasDetail"></canvas>
+                    <div class="chart-legend">
+                        <span><span class="legend-dot" style="background:#FF89A0"></span> CPU</span>
+                        <span><span class="legend-dot" style="background:#FFB347"></span> 内存</span>
+                        <span><span class="legend-dot" style="background:#5BA4CF"></span> 磁盘</span>
+                    </div>
+                </div>
+            </div>
+            `;
+            seedSparklines();
+        }
+
+        async function loadHistoryChart(uuid) {
+            const canvas = document.getElementById('canvasDetail');
+            if (!canvas) return;
+
+            try {
+                const resp = await fetch('/api/records/load?uuid=' + uuid + '&hours=2');
+                const json = await resp.json();
+                if (json.status !== 'success' || !json.data || !json.data.records) return;
+
+                const records = json.data.records;
+                if (records.length === 0) return;
+
+                const ctx2d = canvas.getContext('2d');
+                const container = canvas.parentElement;
+                canvas.width = container.offsetWidth - 40;
+                canvas.height = 240;
+
+                const w = canvas.width;
+                const h = canvas.height;
+                const pad = { top: 16, right: 16, bottom: 28, left: 44 };
+                const pw = w - pad.left - pad.right;
+                const ph = h - pad.top - pad.bottom;
+
+                ctx2d.clearRect(0, 0, w, h);
+
+                ctx2d.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim() || 'rgba(255,183,197,0.2)';
+                ctx2d.lineWidth = 0.5;
+                for (let i = 0; i <= 4; i++) {
+                    const y = pad.top + (ph / 4) * i;
+                    ctx2d.beginPath(); ctx2d.moveTo(pad.left, y); ctx2d.lineTo(w - pad.right, y); ctx2d.stroke();
+                    ctx2d.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#A08090';
+                    ctx2d.font = '10px "Segoe UI", sans-serif'; ctx2d.textAlign = 'right';
+                    ctx2d.fillText((100 - i * 25) + '%', pad.left - 8, y + 3);
+                }
+
+                ctx2d.textAlign = 'center';
+                const step = Math.max(1, Math.floor(records.length / 6));
+                for (let i = 0; i < records.length; i += step) {
+                    const x = pad.left + (pw / (records.length - 1)) * i;
+                    const time = new Date(records[i].time);
+                    ctx2d.fillText(
+                        time.getHours().toString().padStart(2, '0') + ':' + time.getMinutes().toString().padStart(2, '0'),
+                        x, h - pad.bottom + 14
+                    );
+                }
+
+                const hexToRgba = (hex, alpha) => {
+                    const r = parseInt(hex.slice(1, 3), 16);
+                    const g = parseInt(hex.slice(3, 5), 16);
+                    const b = parseInt(hex.slice(5, 7), 16);
+                    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+                };
+
+                const lineDefs = [
+                    { key: 'cpu', color: '#FF89A0' },
+                    { key: 'ram', color: '#FFB347' },
+                    { key: 'disk', color: '#5BA4CF' }
+                ];
+
+                // Draw fills first (behind lines)
+                lineDefs.forEach(def => {
+                    ctx2d.beginPath();
+                    let first = true;
+                    for (let i = 0; i < records.length; i++) {
+                        const x = pad.left + (pw / (records.length - 1)) * i;
+                        const val = records[i][def.key] || 0;
+                        const y = pad.top + ph - (val / 100) * ph;
+                        if (first) { ctx2d.moveTo(x, y); first = false; }
+                        else ctx2d.lineTo(x, y);
+                    }
+                    ctx2d.lineTo(pad.left + pw, pad.top + ph);
+                    ctx2d.lineTo(pad.left, pad.top + ph);
+                    ctx2d.closePath();
+                    const grad = ctx2d.createLinearGradient(0, pad.top, 0, pad.top + ph);
+                    grad.addColorStop(0, hexToRgba(def.color, 0.12));
+                    grad.addColorStop(1, 'rgba(255,255,255,0)');
+                    ctx2d.fillStyle = grad;
+                    ctx2d.fill();
+                });
+
+                // Draw strokes on top
+                lineDefs.forEach(def => {
+                    ctx2d.beginPath();
+                    ctx2d.strokeStyle = def.color;
+                    ctx2d.lineWidth = 2;
+                    ctx2d.lineJoin = 'round';
+                    let first = true;
+                    for (let i = 0; i < records.length; i++) {
+                        const x = pad.left + (pw / (records.length - 1)) * i;
+                        const val = records[i][def.key] || 0;
+                        const y = pad.top + ph - (val / 100) * ph;
+                        if (first) { ctx2d.moveTo(x, y); first = false; }
+                        else ctx2d.lineTo(x, y);
+                    }
+                    ctx2d.stroke();
+                });
+            } catch (e) {}
+        }
+
+        function updateViewModeUI() {
+            if (viewMode === 'table') {
+                $viewModeIcon.textContent = '🔲';
+                $viewModeText.textContent = '网格视图';
+            } else {
+                $viewModeIcon.textContent = '📋';
+                $viewModeText.textContent = '列表视图';
+            }
+        }
+        updateViewModeUI();
+        $btnViewMode.addEventListener('click', () => {
+            viewMode = viewMode === 'grid' ? 'table' : 'grid';
+            localStorage.setItem('nodeViewMode', viewMode);
+            updateViewModeUI();
+            renderList();
+        });
+
+        $btnRefresh.addEventListener('click', () => {
+            fetchNodes();
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('get');
+            } else {
+                pollRecentData();
+            }
+        });
+
+        async function init() {
+            await fetchSiteInfo();
+            await fetchNodes();
+            connectWebSocket();
+            setInterval(() => {
+                if (!ws || ws.readyState !== WebSocket.OPEN) pollRecentData();
+            }, 30000);
+        }
+        init();
+    })();
+    </script>
+</body>
+</html>

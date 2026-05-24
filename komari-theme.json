@@ -1,0 +1,23 @@
+{
+    "name": "Sakura Monitor",
+    "short": "Sakura",
+    "description": "一款唯美樱花飘落动画的二次元风格Komari服务器监控主题",
+    "version": "1.0.7",
+    "author": "小绫",
+    "url": "https://github.com/Nas32op",
+    "preview": "ico_miku.png",
+    "configuration": {
+        "type": "managed",
+        "icon": "/themes/Sakura/ico_miku.png",
+        "name": "Sakura主题设置",
+        "data": [
+            { "name": "外观设置", "type": "title" },
+            { "key": "sakura_petal_count", "name": "花瓣数量", "type": "number", "default": 30, "help": "屏幕上飘落的樱花花瓣数量（10-60）" },
+            { "key": "sakura_petal_speed", "name": "花瓣飘落速度", "type": "number", "default": 3, "help": "樱花花瓣飘落的速度倍率，1最慢，10最快，建议范围3-6" },
+            { "key": "card_style", "name": "卡片样式", "type": "select", "options": "玻璃拟态,扁平化,毛玻璃", "default": "玻璃拟态", "help": "服务器信息卡片的展示样式" },
+            { "name": "功能设置", "type": "title" },
+            { "key": "auto_refresh_interval", "name": "自动刷新间隔（秒）", "type": "number", "default": 5, "help": "WebSocket断开时自动刷新数据的时间间隔" },
+            { "key": "show_history_chart", "name": "显示历史图表", "type": "switch", "default": true, "help": "是否在服务器详情页显示历史负载图表" }
+        ]
+    }
+}
