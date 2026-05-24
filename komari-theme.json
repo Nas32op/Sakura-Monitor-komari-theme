@@ -2,9 +2,9 @@
     "name": "Sakura Monitor",
     "short": "Sakura",
     "description": "一款唯美樱花飘落动画的二次元风格Komari服务器监控主题",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "author": "小绫",
-    "url": "https://github.com/Nas32op",
+    "url": "https://github.com/Nas32op/Sakura-Monitor-komari-theme",
     "preview": "ico_miku.png",
     "configuration": {
         "type": "managed",
